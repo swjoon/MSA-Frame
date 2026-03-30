@@ -1,1 +1,1 @@
-rootProject.name = "ApiGateway"
+rootProject.name = "gateway-server"
