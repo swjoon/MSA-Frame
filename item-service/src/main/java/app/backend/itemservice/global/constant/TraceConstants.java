@@ -1,4 +1,4 @@
-package app.backend.paymentservice.global.constant;
+package app.backend.itemservice.global.constant;
 
 public final class TraceConstants {
 
