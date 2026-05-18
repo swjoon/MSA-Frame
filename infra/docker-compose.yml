@@ -1,0 +1,362 @@
+# services:
+#   mysql:
+#     image: mysql:8.0
+#     container_name: msa-mysql
+#     ports:
+#       - "3306:3306"
+#     environment:
+#       MYSQL_ROOT_PASSWORD: root1234
+#       TZ: Asia/Seoul
+#     command:
+#       - --server-id=1
+#       - --log-bin=mysql-bin
+#       - --binlog-format=ROW
+#       - --binlog-row-image=FULL
+#       - --binlog-expire-logs-seconds=864000
+#       - --character-set-server=utf8mb4
+#       - --collation-server=utf8mb4_unicode_ci
+#       - --default-time-zone=+09:00
+#     volumes:
+#       - mysql-data:/var/lib/mysql
+#       - ./mysql/init:/docker-entrypoint-initdb.d
+#     networks:
+#       - msa-event-net
+
+#   elasticsearch:
+#     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+#     container_name: msa-elasticsearch
+#     environment:
+#       - discovery.type=single-node
+#       - xpack.security.enabled=false
+#       - ES_JAVA_OPTS=-Xms512m -Xmx512m
+#       - TZ=Asia/Seoul
+#     ports:
+#       - "9200:9200"
+#     volumes:
+#       - es-data:/usr/share/elasticsearch/data
+#     networks:
+#       - msa-log-net
+
+#   kibana:
+#     image: docker.elastic.co/kibana/kibana:8.13.4
+#     container_name: msa-kibana
+#     environment:
+#       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+#       - TZ=Asia/Seoul
+#     ports:
+#       - "5601:5601"
+#     depends_on:
+#       - elasticsearch
+#     networks:
+#       - msa-log-net
+
+#   logstash:
+#     image: docker.elastic.co/logstash/logstash:8.13.4
+#     container_name: msa-logstash
+#     ports:
+#       - "5044:5044"
+#     volumes:
+#       - ./logstash/pipeline:/usr/share/logstash/pipeline
+#     environment:
+#       - TZ=Asia/Seoul
+#       - LS_JAVA_OPTS=-Xms256m -Xmx256m
+#     depends_on:
+#       - elasticsearch
+#     networks:
+#       - msa-log-net
+
+#   filebeat:
+#     image: docker.elastic.co/beats/filebeat:8.13.4
+#     container_name: msa-filebeat
+#     user: root
+#     command: ["--strict.perms=false"]
+#     volumes:
+#       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+#       - ../logs:/logs:ro
+#     depends_on:
+#       - logstash
+#     networks:
+#       - msa-log-net
+
+#   kafka:
+#     image: apache/kafka:4.1.0
+#     container_name: msa-kafka
+#     ports:
+#       - "9092:9092"
+#     environment:
+#       TZ: Asia/Seoul
+
+#       KAFKA_NODE_ID: 1
+#       KAFKA_PROCESS_ROLES: broker,controller
+#       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+#       KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:9092
+#       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+#       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+#       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+#       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+#       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+#       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+#       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+#       KAFKA_NUM_PARTITIONS: 3
+#       KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+#       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+#       KAFKA_LOG_RETENTION_HOURS: 168
+#     volumes:
+#       - kafka-data:/var/lib/kafka/data
+#     networks:
+#       - msa-event-net
+
+#   debezium-connect:
+#     image: quay.io/debezium/connect:3.4
+#     container_name: msa-debezium-connect
+#     ports:
+#       - "8083:8083"
+#     environment:
+#       TZ: Asia/Seoul
+#       BOOTSTRAP_SERVERS: kafka:29092
+#       GROUP_ID: msa-connect-cluster
+#       CONFIG_STORAGE_TOPIC: msa_connect_configs
+#       OFFSET_STORAGE_TOPIC: msa_connect_offsets
+#       STATUS_STORAGE_TOPIC: msa_connect_statuses
+#       KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+#       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+#       VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+#     depends_on:
+#       - kafka
+#       - mysql
+#     networks:
+#       - msa-event-net
+
+# volumes:
+#   mysql-data:
+#   es-data:
+#   kafka-data:
+
+# networks:
+#   msa-log-net:
+#     driver: bridge
+#   msa-event-net:
+#     driver: bridge
+x-common-logging: &common-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: msa-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      TZ: Asia/Seoul
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --binlog-expire-logs-seconds=864000
+
+      # 로컬 저사양 튜닝
+      - --innodb-buffer-pool-size=128M
+      - --max-connections=80
+      - --performance-schema=OFF
+
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - msa-event-net
+    mem_limit: 768m
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot1234 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  kafka:
+    image: apache/kafka:4.1.0
+    container_name: msa-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      TZ: Asia/Seoul
+
+      # JVM 메모리 제한
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - msa-event-net
+    mem_limit: 768m
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+
+  debezium-connect:
+    image: quay.io/debezium/connect:3.4
+    container_name: msa-debezium-connect
+    ports:
+      - "8083:8083"
+    environment:
+      TZ: Asia/Seoul
+
+      # JVM 메모리 제한
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: msa-connect-cluster
+
+      CONFIG_STORAGE_TOPIC: msa_connect_configs
+      OFFSET_STORAGE_TOPIC: msa_connect_offsets
+      STATUS_STORAGE_TOPIC: msa_connect_statuses
+
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+      REST_ADVERTISED_HOST_NAME: debezium-connect
+      REST_PORT: 8083
+
+      # 플러그인 스캔 부담 감소
+      # 만약 connector-plugins에서 MySqlConnector가 안 보이면 이 옵션만 제거
+      CONNECT_PLUGIN_DISCOVERY: service_load
+
+      OFFSET_FLUSH_INTERVAL_MS: 10000
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks:
+      - msa-event-net
+    mem_limit: 768m
+    logging: *common-logging
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: msa-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      TZ: Asia/Seoul
+
+      # 로컬 단일 노드용
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - msa-log-net
+    mem_limit: 1g
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 50s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: msa-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      NODE_OPTIONS: "--max-old-space-size=384"
+      TZ: Asia/Seoul
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - msa-log-net
+    mem_limit: 768m
+    logging: *common-logging
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    container_name: msa-logstash
+    ports:
+      - "5044:5044"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    environment:
+      TZ: Asia/Seoul
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - msa-log-net
+    mem_limit: 512m
+    logging: *common-logging
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.4
+    container_name: msa-filebeat
+    user: root
+    command: ["--strict.perms=false"]
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ../logs:/logs:ro
+    depends_on:
+      - logstash
+    networks:
+      - msa-log-net
+    mem_limit: 256m
+    logging: *common-logging
+
+volumes:
+  mysql-data:
+  es-data:
+  kafka-data:
+
+networks:
+  msa-log-net:
+    driver: bridge
+  msa-event-net:
+    driver: bridge
