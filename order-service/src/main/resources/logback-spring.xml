@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- application.yml의 spring.application.name 값을 가져옴 -->
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name"/>
+
+    <!-- spring.profiles.active 값. 없으면 default -->
+    <springProperty scope="context" name="PROFILE" source="spring.profiles.active" defaultValue="default"/>
+
+    <!-- 실행 환경변수 INSTANCE_ID 값. 없으면 local -->
+    <springProperty scope="context" name="INSTANCE_ID" source="INSTANCE_ID" defaultValue="local"/>
+
+    <!-- 실행 환경변수 LOG_HOME 값. 없으면 현재 프로젝트 기준 ./logs -->
+    <property name="LOG_HOME" value="${LOG_HOME:-./logs}"/>
+
+    <conversionRule conversionWord="clr"
+                    converterClass="org.springframework.boot.logging.logback.ColorConverter"/>
+
+    <!-- 콘솔 로그 패턴 -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} [%thread] %clr(%5level) [%X{traceId:-NO_TRACE}] %cyan(%logger{36}) - %msg%n"/>
+
+    <!-- 일반 파일 로그 패턴 -->
+    <property name="FILE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} [%thread] %-5level [%X{traceId:-NO_TRACE}] [%logger{36}:%line] - %msg%n"/>
+
+    <!-- 콘솔 출력 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 일반 파일 로그 -->
+    <appender name="APP_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/${APP_NAME}/${INSTANCE_ID}/app.log</file>
+
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}/${INSTANCE_ID}/app.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- ELK / Filebeat / Logstash 전송용 JSON 로그 -->
+    <appender name="ELK_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/${APP_NAME}/${INSTANCE_ID}/app.json</file>
+
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp>
+                    <fieldName>@timestamp</fieldName>
+                    <timeZone>Asia/Seoul</timeZone>
+                </timestamp>
+
+                <logLevel>
+                    <fieldName>level</fieldName>
+                </logLevel>
+
+                <threadName>
+                    <fieldName>thread</fieldName>
+                </threadName>
+
+                <loggerName>
+                    <fieldName>logger</fieldName>
+                </loggerName>
+
+                <!-- MDC 값 출력: traceId가 여기에 포함됨 -->
+                <mdc/>
+
+                <pattern>
+                    <pattern>
+                        {
+                        "service": "${APP_NAME}",
+                        "instance": "${INSTANCE_ID}",
+                        "profile": "${PROFILE}",
+                        "message": "%message",
+                        "caller": "%class:%line"
+                        }
+                    </pattern>
+                </pattern>
+
+                <stackTrace>
+                    <fieldName>stack_trace</fieldName>
+                </stackTrace>
+            </providers>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/${APP_NAME}/${INSTANCE_ID}/app.%d{yyyy-MM-dd}.%i.json</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="APP_FILE"/>
+        <appender-ref ref="ELK_JSON"/>
+    </root>
+
+</configuration>
