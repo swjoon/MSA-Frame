@@ -568,12 +568,6 @@ mindmap
       MySQL
       Redis
       Kafka
-    Portfolio Points
-      MSA
-      Payment Consistency
-      Distributed Lock
-      Event Driven Architecture
-      Observability
 ```
 
 ---
