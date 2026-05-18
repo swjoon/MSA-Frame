@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/user-service")
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserController {
 

@@ -1,15 +1,61 @@
 server:
-  port: 8080
+  port: 0
 
 spring:
   application:
     name: user-service
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/order_service?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root1234}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: 60000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      '[hibernate.default_batch_fetch_size]': 100
+      '[hibernate.format_sql]': true
+    show-sql: true
+    open-in-view: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password:
+
   config:
-    import: optional:configserver:http://admin:1234@localhost:9000
+    import: optional:configserver:${CONFIG_SERVER_URL:http://admin:1234@localhost:9000}
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 3000
+            loggerLevel: full
 
 eureka:
+
+  instance:
+    instance-id: ${spring.cloud.client.ip-address}:${random.value}
+    prefer-ip-address: true
+
   client:
     register-with-eureka: true
     fetch-registry: true
     service-url:
       defaultZone: http://admin:1234@localhost:8761/eureka
+
+logging:
+  level:
+    app.backend.order.client: DEBUG
+    feign: DEBUG
